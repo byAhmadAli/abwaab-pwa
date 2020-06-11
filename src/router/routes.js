@@ -7,6 +7,15 @@ const routes = [
       { path: '', component: () => import('pages/Index.vue') },
     ],
   },
+  {
+    path: '/posts',
+    component: () => import('layouts/MainLayout.vue'),
+    children: [
+      { path: '/posts/:id', component: () => import('pages/Error404.vue') },
+      { path: '/posts/:id/edit', component: () => import('pages/Error404.vue') },
+      { path: '/posts/create', component: () => import('pages/Error404.vue') },
+    ],
+  },
 ];
 
 // Always leave this as last one
