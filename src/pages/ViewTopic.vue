@@ -2,7 +2,7 @@
   <q-page class="q-pt-lg">
     <div class="text-center">
       <q-spinner
-        v-if="loading"
+        v-if="loadingTopicState"
         color="primary"
         size="5.5em"
         :thickness="2"
@@ -10,8 +10,8 @@
     </div>
     <div class="fit row wrap justify-center items-start content-start"  v-if="!isEmptyData">
       <div class="col-8 self-center">
-        <h2>{{topic.title}}</h2>
-        <div class="text-center" v-if="loadingPhotos && !loading">
+        <h2>{{topicDataState.title}}</h2>
+        <div class="text-center" v-if="loadingPhotosState && !loadingTopicState">
           <q-spinner
             color="primary"
             size="5.5em"
@@ -29,7 +29,7 @@
             v-if="hasPhotos"
           >
             <q-carousel-slide
-              v-for="photo in photos"
+              v-for="photo in topicPhotosState"
               :key="photo.id"
               :name="photo.id"
               :img-src="photo.url"
@@ -49,7 +49,7 @@
           </q-carousel>
         </div>
         <p class="q-pt-lg">
-          <span v-for="n in 15" :key="n">{{topic.body}}</span>
+          <span v-for="n in 15" :key="n">{{topicDataState.body}}</span>
         </p>
       </div>
     </div>
@@ -74,61 +74,77 @@
 </template>
 
 <script>
-import Axios from 'axios';
 
 export default {
   name: 'ViewTopic',
   data() {
     return {
-      loading: true,
-      loadingPhotos: true,
-      topic: {},
-      photos: [],
       slide: 1,
       fullscreen: false,
     };
   },
   methods: {
     fetchTopicById(id) {
-      this.loading = true;
-      this.topic = {};
-      Axios.get(`/api/posts/${id}`)
+      this.$store.commit('topic/reset');
+
+      this.$request.get(`/posts/${id}`)
         .then((res) => {
-          this.topic = res.data;
-          this.loading = false;
-          Axios.get(`/api/posts/${id}/photos`)
+          this.$store.commit('topic/updateTopicState', res.data);
+          this.$store.commit('topic/updateTopicLoadingState', false);
+          this.$request.get(`/posts/${id}/photos`)
             .then((photosRes) => {
-              this.photos = photosRes.data;
-              this.loadingPhotos = false;
+              this.$store.commit('topic/updateTopicPhotosState', photosRes.data);
+              this.$store.commit('topic/updateTopicPhotosLoadingState', false);
             })
             .catch((err) => {
-              this.loadingPhotos = false;
-              this.$q.notify({
-                message: `${err.response.status} - Error`,
-                caption: err.response.statusText,
-                type: 'negative',
-                position: 'bottom-right',
-              });
+              this.$store.commit('topic/updateTopicPhotosLoadingState', false);
+              if (this.$request.isCancel(err)) {
+                console.log('Request canceled', err.message);
+              } else {
+                this.$q.notify({
+                  message: `${err.response.status} - Error`,
+                  caption: err.response.statusText,
+                  type: 'negative',
+                  position: 'bottom-right',
+                });
+              }
             });
         })
         .catch((err) => {
-          this.loading = false;
-          this.$q.notify({
-            message: `${err.response.status} - Error`,
-            caption: err.response.statusText,
-            type: 'negative',
-            position: 'bottom-right',
-          });
+          this.$store.commit('topic/updateTopicLoadingState', false);
+          if (this.$request.isCancel(err)) {
+            console.log('Request canceled', err.message);
+          } else {
+            this.$q.notify({
+              message: `${err.response.status} - Error`,
+              caption: err.response.statusText,
+              type: 'negative',
+              position: 'bottom-right',
+            });
+          }
         });
     },
   },
   computed: {
     isEmptyData() {
-      return (Object.keys(this.topic).length === 0 && this.topic.constructor === Object)
-      && !this.loading;
+      return (Object.keys(this.$store.state.topic.data).length === 0
+      && this.$store.state.topic.data.constructor === Object)
+      && !this.$store.state.topic.loading;
     },
     hasPhotos() {
-      return this.photos.length > 0;
+      return this.$store.state.topic.photos.length > 0;
+    },
+    loadingPhotosState() {
+      return this.$store.state.topic.loadingPhotos;
+    },
+    topicPhotosState() {
+      return this.$store.state.topic.photos;
+    },
+    loadingTopicState() {
+      return this.$store.state.topic.loading;
+    },
+    topicDataState() {
+      return this.$store.state.topic.data;
     },
   },
   mounted() {
