@@ -74,6 +74,7 @@
 </template>
 
 <script>
+import { cancelToken } from '../boot/axios';
 
 export default {
   name: 'ViewTopic',
@@ -81,37 +82,45 @@ export default {
     return {
       slide: 1,
       fullscreen: false,
+      source: null,
     };
   },
   methods: {
-    fetchTopicById(id) {
+    async fetchTopicById(id) {
+      this.source = cancelToken.source();
       this.$store.commit('topic/reset');
 
-      this.$request.get(`/posts/${id}`)
-        .then((res) => {
+      await this.$request.get(`/posts/${id}`, {
+        cancelToken: this.source.token,
+      })
+        .then(async (res) => {
           this.$store.commit('topic/updateTopicState', res.data);
-          this.$store.commit('topic/updateTopicLoadingState', false);
-          this.$request.get(`/posts/${id}/photos`)
-            .then((photosRes) => {
-              this.$store.commit('topic/updateTopicPhotosState', photosRes.data);
-              this.$store.commit('topic/updateTopicPhotosLoadingState', false);
-            })
-            .catch((err) => {
-              this.$store.commit('topic/updateTopicPhotosLoadingState', false);
-              if (this.$request.isCancel(err)) {
-                console.log('Request canceled', err.message);
-              } else {
-                this.$q.notify({
-                  message: `${err.response.status} - Error`,
-                  caption: err.response.statusText,
-                  type: 'negative',
-                  position: 'bottom-right',
-                });
-              }
-            });
+          this.$store.commit('topic/updateTopicLoadingState', { key: 'loading', value: false });
+          this.$store.commit('topic/updateTopicShowCommentsState', true);
         })
         .catch((err) => {
-          this.$store.commit('topic/updateTopicLoadingState', false);
+          this.$store.commit('topic/updateTopicLoadingState', { key: 'loading', value: false });
+          if (this.$request.isCancel(err)) {
+            console.log('Request canceled', err.message);
+          } else {
+            this.$q.notify({
+              message: `${err.response.status} - Error`,
+              caption: err.response.statusText,
+              type: 'negative',
+              position: 'bottom-right',
+            });
+          }
+        });
+
+      await this.$request.get(`/posts/${id}/photos`, {
+        cancelToken: this.source.token,
+      })
+        .then((photosRes) => {
+          this.$store.commit('topic/updateTopicPhotosState', photosRes.data);
+          this.$store.commit('topic/updateTopicLoadingState', { key: 'loadingPhotos', value: false });
+        })
+        .catch((err) => {
+          this.$store.commit('topic/updateTopicLoadingState', { key: 'loadingPhotos', value: false });
           if (this.$request.isCancel(err)) {
             console.log('Request canceled', err.message);
           } else {
@@ -147,8 +156,13 @@ export default {
       return this.$store.state.topic.data;
     },
   },
-  mounted() {
-    this.fetchTopicById(this.$route.params.id);
+  async mounted() {
+    await this.fetchTopicById(this.$route.params.id);
+  },
+  beforeDestroy() {
+    if (this.source) {
+      this.source.cancel('Your cancellation message');
+    }
   },
 };
 </script>
